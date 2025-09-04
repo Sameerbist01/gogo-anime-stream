@@ -1,5 +1,5 @@
-// GogoAnime API client
-const API_BASE_URL = 'https://api.apurvsikka.workers.dev';
+// Consumet API client - Modern anime API with reliable data
+const API_BASE_URL = 'https://api.consumet.org/anime/gogoanime';
 
 export interface AnimeItem {
   id: string;
@@ -56,36 +56,49 @@ export class AnimeAPI {
   }
 
   static async getRecentAnime(page: number = 1): Promise<AnimeItem[]> {
-    const data = await this.fetchData<any>(`/recent/${page}`);
+    const data = await this.fetchData<any>(`/recent-episodes?page=${page}`);
     return data.results || [];
   }
 
   static async getPopularAnime(page: number = 1): Promise<AnimeItem[]> {
-    const data = await this.fetchData<any>(`/gogoPopular/${page}`);
+    const data = await this.fetchData<any>(`/top-airing?page=${page}`);
     return data.results || [];
   }
 
   static async searchAnime(query: string): Promise<AnimeItem[]> {
     if (!query.trim()) return [];
-    const data = await this.fetchData<any>(`/search/${encodeURIComponent(query)}`);
+    const data = await this.fetchData<any>(`/${encodeURIComponent(query)}`);
     return data.results || [];
   }
 
   static async getAnimeDetails(id: string): Promise<AnimeDetails> {
-    const data = await this.fetchData<AnimeDetails>(`/anime/${id}`);
+    const data = await this.fetchData<AnimeDetails>(`/info/${id}`);
     return data;
   }
 
   static async getEpisodeStreams(episodeId: string): Promise<StreamingUrls> {
-    const data = await this.fetchData<StreamingUrls>(`/episode/${episodeId}`);
+    const data = await this.fetchData<StreamingUrls>(`/watch/${episodeId}`);
     return data;
   }
 
   static async getHomeData() {
-    const data = await this.fetchData<any>('/home');
-    return {
-      trending: data.trending || [],
-      popular: data.popular || []
-    };
+    try {
+      const [recent, popular] = await Promise.all([
+        this.getRecentAnime(1),
+        this.getPopularAnime(1)
+      ]);
+      return {
+        trending: popular, // Use popular as trending
+        popular: popular,
+        recent: recent
+      };
+    } catch (error) {
+      console.error('Failed to load home data:', error);
+      return {
+        trending: [],
+        popular: [],
+        recent: []
+      };
+    }
   }
 }
