@@ -82,6 +82,13 @@ export default function EpisodePage() {
               <h1 className="text-3xl font-bold text-anime-text-primary mb-2">
                 {title}
               </h1>
+              <Alert className="bg-primary/10 border-primary/30">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Demo Mode:</strong> Real anime streaming APIs have CORS restrictions and require server-side implementation. 
+                  Currently showing different demo videos per episode to demonstrate the player functionality.
+                </AlertDescription>
+              </Alert>
             </div>
           )}
 
