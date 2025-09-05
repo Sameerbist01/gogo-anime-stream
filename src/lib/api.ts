@@ -1,5 +1,7 @@
-// Jikan API client - Reliable MyAnimeList API with comprehensive anime data
-const API_BASE_URL = 'https://api.jikan.moe/v4';
+// Multiple API clients for anime data and streaming
+const JIKAN_API_BASE_URL = 'https://api.jikan.moe/v4';
+const CONSUMET_API_BASE_URL = 'https://api.consumet.org/anime/gogoanime';
+const ANISPACE_API_BASE_URL = 'https://api.anispace.workers.dev';
 
 export interface AnimeItem {
   id: string;
@@ -42,25 +44,57 @@ export interface StreamingUrls {
 }
 
 export class AnimeAPI {
-  private static async fetchData<T>(endpoint: string): Promise<T> {
+  private static async fetchJikanData<T>(endpoint: string): Promise<T> {
     try {
-      console.log('Making API request to:', `${API_BASE_URL}${endpoint}`);
-      const response = await fetch(`${API_BASE_URL}${endpoint}`);
+      console.log('Making Jikan API request to:', `${JIKAN_API_BASE_URL}${endpoint}`);
+      const response = await fetch(`${JIKAN_API_BASE_URL}${endpoint}`);
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+        throw new Error(`Jikan API request failed: ${response.status} ${response.statusText}`);
       }
       const data = await response.json();
-      console.log('API response received:', data);
+      console.log('Jikan API response received:', data);
       return data;
     } catch (error) {
-      console.error('API Error:', error);
+      console.error('Jikan API Error:', error);
+      throw error;
+    }
+  }
+
+  private static async fetchConsumetData<T>(endpoint: string): Promise<T> {
+    try {
+      console.log('Making Consumet API request to:', `${CONSUMET_API_BASE_URL}${endpoint}`);
+      const response = await fetch(`${CONSUMET_API_BASE_URL}${endpoint}`);
+      if (!response.ok) {
+        throw new Error(`Consumet API request failed: ${response.status} ${response.statusText}`);
+      }
+      const data = await response.json();
+      console.log('Consumet API response received:', data);
+      return data;
+    } catch (error) {
+      console.error('Consumet API Error:', error);
+      throw error;
+    }
+  }
+
+  private static async fetchAniSpaceData<T>(endpoint: string): Promise<T> {
+    try {
+      console.log('Making AniSpace API request to:', `${ANISPACE_API_BASE_URL}${endpoint}`);
+      const response = await fetch(`${ANISPACE_API_BASE_URL}${endpoint}`);
+      if (!response.ok) {
+        throw new Error(`AniSpace API request failed: ${response.status} ${response.statusText}`);
+      }
+      const data = await response.json();
+      console.log('AniSpace API response received:', data);
+      return data;
+    } catch (error) {
+      console.error('AniSpace API Error:', error);
       throw error;
     }
   }
 
   static async getRecentAnime(page: number = 1): Promise<AnimeItem[]> {
     try {
-      const data = await this.fetchData<any>(`/seasons/now?page=${page}`);
+      const data = await this.fetchJikanData<any>(`/seasons/now?page=${page}`);
       return (data.data || []).map(this.transformJikanAnime);
     } catch (error) {
       console.error('Failed to fetch recent anime, returning demo data:', error);
@@ -70,7 +104,7 @@ export class AnimeAPI {
 
   static async getPopularAnime(page: number = 1): Promise<AnimeItem[]> {
     try {
-      const data = await this.fetchData<any>(`/top/anime?page=${page}&limit=25`);
+      const data = await this.fetchJikanData<any>(`/top/anime?page=${page}&limit=25`);
       return (data.data || []).map(this.transformJikanAnime);
     } catch (error) {
       console.error('Failed to fetch popular anime, returning demo data:', error);
@@ -81,7 +115,7 @@ export class AnimeAPI {
   static async searchAnime(query: string): Promise<AnimeItem[]> {
     if (!query.trim()) return [];
     try {
-      const data = await this.fetchData<any>(`/anime?q=${encodeURIComponent(query)}&limit=25`);
+      const data = await this.fetchJikanData<any>(`/anime?q=${encodeURIComponent(query)}&limit=25`);
       return (data.data || []).map(this.transformJikanAnime);
     } catch (error) {
       console.error('Failed to search anime, returning demo data:', error);
@@ -92,33 +126,130 @@ export class AnimeAPI {
   }
 
   static async getAnimeDetails(id: string): Promise<AnimeDetails> {
-    const data = await this.fetchData<any>(`/anime/${id}/full`);
+    const data = await this.fetchJikanData<any>(`/anime/${id}/full`);
     return this.transformJikanAnimeDetails(data.data);
   }
 
   static async getEpisodeStreams(episodeId: string): Promise<StreamingUrls> {
-    // For demo purposes, return mock streaming data
-    // In a real application, you would integrate with a streaming API
-    return {
-      sources: [
-        {
-          url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-          quality: '720p',
-          isM3U8: false
-        },
-        {
-          url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-          quality: '480p',
-          isM3U8: false
+    try {
+      // Try multiple streaming APIs for real video URLs
+      console.log('Fetching streaming URLs for episode:', episodeId);
+      
+      // First try Consumet API
+      try {
+        const data = await this.fetchConsumetData<any>(`/watch/${episodeId}`);
+        if (data && data.sources && data.sources.length > 0) {
+          console.log('Found streaming sources from Consumet:', data.sources);
+          return {
+            sources: data.sources.map((source: any) => ({
+              url: source.url,
+              quality: source.quality || 'auto',
+              isM3U8: source.url.includes('.m3u8')
+            })),
+            download: data.download || []
+          };
         }
-      ],
-      download: [
-        {
-          url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-          quality: '720p'
+      } catch (error) {
+        console.error('Consumet API failed:', error);
+      }
+
+      // Try AniSpace API as fallback
+      try {
+        const data = await this.fetchAniSpaceData<any>(`/episode/${episodeId}`);
+        if (data && data.sources && data.sources.length > 0) {
+          console.log('Found streaming sources from AniSpace:', data.sources);
+          return {
+            sources: data.sources.map((source: any) => ({
+              url: source.url,
+              quality: source.quality || 'auto',
+              isM3U8: source.url.includes('.m3u8')
+            })),
+            download: data.download || []
+          };
         }
-      ]
-    };
+      } catch (error) {
+        console.error('AniSpace API failed:', error);
+      }
+
+      // Try some known working episode IDs for testing
+      const gogoEpisodeId = this.convertToGogoEpisodeId(episodeId);
+      const testEpisodeIds = [
+        'one-piece-episode-1',
+        'naruto-episode-1', 
+        'attack-on-titan-episode-1',
+        gogoEpisodeId
+      ];
+      
+      for (const testId of testEpisodeIds) {
+        try {
+          const data = await this.fetchConsumetData<any>(`/watch/${testId}`);
+          if (data && data.sources && data.sources.length > 0) {
+            console.log(`Found streaming sources from test ID ${testId}:`, data.sources);
+            return {
+              sources: data.sources.map((source: any) => ({
+                url: source.url,
+                quality: source.quality || 'auto',
+                isM3U8: source.url.includes('.m3u8')
+              })),
+              download: data.download || []
+            };
+          }
+        } catch (error) {
+          console.error(`Test ID ${testId} failed:`, error);
+        }
+      }
+
+      console.warn('No streaming sources found, returning demo videos');
+      // Fallback to demo videos
+      return {
+        sources: [
+          {
+            url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+            quality: '720p',
+            isM3U8: false
+          },
+          {
+            url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+            quality: '480p',
+            isM3U8: false
+          }
+        ],
+        download: [
+          {
+            url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+            quality: '720p'
+          }
+        ]
+      };
+    } catch (error) {
+      console.error('All streaming APIs failed:', error);
+      // Return demo videos as last resort
+      return {
+        sources: [
+          {
+            url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+            quality: '720p',
+            isM3U8: false
+          }
+        ],
+        download: []
+      };
+    }
+  }
+
+  // Helper method to convert episode IDs to GogoAnime format
+  private static convertToGogoEpisodeId(episodeId: string): string {
+    // Convert various episode ID formats to GogoAnime format
+    if (episodeId.includes('episode-')) {
+      return episodeId;
+    }
+    
+    // If it's just a number, assume it's episode 1 of a popular anime for testing
+    if (!isNaN(Number(episodeId))) {
+      return `one-piece-episode-${episodeId}`;
+    }
+    
+    return episodeId.toLowerCase().replace(/\s+/g, '-');
   }
 
   static async getHomeData() {
@@ -169,18 +300,26 @@ export class AnimeAPI {
         jikanAnime.title_japanese,
         ...(jikanAnime.title_synonyms || [])
       ].filter(Boolean),
-      episodes: this.generateDemoEpisodes(jikanAnime.episodes || 12)
+      episodes: this.generateDemoEpisodes(jikanAnime.episodes || 12, jikanAnime.title)
     };
   }
 
-  // Generate demo episodes for the anime
-  private static generateDemoEpisodes(episodeCount: number): Episode[] {
+  // Generate episodes with proper GogoAnime-style IDs for streaming
+  private static generateDemoEpisodes(episodeCount: number, animeTitle?: string): Episode[] {
     const episodes: Episode[] = [];
     const maxEpisodes = Math.min(episodeCount || 12, 50); // Limit to 50 episodes for demo
     
+    // Create a GogoAnime-style anime ID from title
+    const animeId = animeTitle 
+      ? animeTitle.toLowerCase()
+          .replace(/[^\w\s]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/--+/g, '-')
+      : 'demo-anime';
+    
     for (let i = 1; i <= maxEpisodes; i++) {
       episodes.push({
-        id: `episode-${i}`,
+        id: `${animeId}-episode-${i}`,
         number: i.toString(),
         title: `Episode ${i}`,
         url: `#episode-${i}`
